@@ -1,0 +1,56 @@
+import make_lookuptable
+
+import re
+
+lookup_table = make_lookuptable.get_lookuptable()
+font_label =0
+
+
+def get_word_lookup_index(word):
+    # get the key/index associated to the word
+    for i,wrd in lookup_table.items():
+        if wrd == word:
+            return i
+    return
+
+
+def get_index_value(inst_unique_array_a):
+    indexes_a = []
+
+    for word_a in inst_unique_array_a:
+        indexes_a.append(get_word_lookup_index(word_a))
+    indexes_a = sorted(indexes_a, key=int)
+
+    values_a=[1]*len(inst_unique_array_a)
+    """i deleted the counting and changed it into a list consisting of 1, 
+    so it becomes [1,1,1,1.....] with the length of inst_unique_array_a"""
+
+    return indexes_a, values_a
+
+with open('missions_pp_delimited.csv', 'r', encoding='utf-8') as f:
+    for line in f:
+        if line != "ENDENDEND\n" and line != "\n":
+            font_missions = []
+            font_missions.append(line.lower())
+
+            inst_array = []
+            for word in re.findall(r'\w+', font_missions.__getitem__(-1)):
+                inst_array.append(word)
+            inst_unique_array = list(set(inst_array))
+
+            indexes, values = get_index_value(inst_unique_array)
+            # for i in range(0, len(indexes)):
+                # print(str(indexes.__getitem__(i)) + ":" + str(values.__getitem__(i)))
+
+            wr = open("Happy Birthday", "a")
+            wr.write(str(font_label)+" ")
+            for i in range(0, len(indexes)):
+                wr.write(str(indexes.__getitem__(i)) + ":" + str(values.__getitem__(i))+" ")
+                """i moved "wr.write(str(font_label)+" ")" out of the loop,
+                because initially it is in the loop and so it added the fontlabel every time the loop runs"""
+
+            wr.write('\n')
+            wr.close()
+        elif line == "ENDENDEND\n":
+            font_label += 1
+f.close()

@@ -1,0 +1,16 @@
+'Process mission statements to remove non-alphanumeric characters
+'as well as spaces and forward slashes.
+'use as, e.g., =PreProcess(A1)
+
+Function PreProcess(Rng As Range)
+    Dim strTemp As String
+    Dim n As Long
+    
+    For n = 1 To Len(Rng)
+        Select Case Asc(Mid(UCase(Rng), n, 1))
+            Case 32, 48 To 57, 65 To 90
+                strTemp = strTemp & Mid(UCase(Rng), n, 1)
+        End Select
+    Next
+    PreProcess = strTemp
+End Function
