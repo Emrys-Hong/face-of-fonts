@@ -8,9 +8,10 @@ from nltk import word_tokenize
 from scipy.spatial.distance import cosine
 from keras.models import load_model
 import tensorflow as tf
-import keras
+import operator
 
-df = pd.read_excel('C:/Users/QZ/Desktop/THCompetition/final code/fonts.xlsx')
+
+df = pd.read_excel('dataset/fonts.xlsx')
 classdict = {}
 for i in df.index:
     try:
@@ -19,19 +20,57 @@ for i in df.index:
         classdict[df.ix[i, 'Font']] = [df.ix[i, 'Mission_statement']]
 
 # just to randomly shuffle the dataset
-# to get 80-20 training and test split
+#to get 80-20 training and test split
 classdict_train = {}
 classdict_test = {}
-classdict_dev = {}
 for keys in classdict.keys():
-    classdict_dev[keys] = classdict[keys][:int(len(classdict[keys]) / 5)]
-    classdict_train[keys] = classdict[keys][int(
-        len(classdict[keys]) / 5):int(len(classdict[keys]) * 4 / 5)]
-    classdict_test[keys] = classdict[keys][int(len(classdict[keys]) * 4 / 5):]
+    classdict[keys] = np.random.permutation(classdict[keys])
+    classdict_train[keys] = classdict[keys][:int(len(classdict[keys])*4/5)]
+    classdict_test[keys] = classdict[keys][int(len(classdict[keys])*4/5):]
 
 
-wvmodel = gensim.models.KeyedVectors.load_word2vec_format(
-    'C:/Users/QZ/Desktop/THCompetition/final code/GoogleNews-vectors-negative300.bin.gz', binary=True)
+wvmodel = gensim.models.KeyedVectors.load_word2vec_format('GoogleNews-vectors-negative300.bin.gz', binary=True)
+
+
+class SumEmbeddedVecClassifier:
+    def __init__(self, wvmodel, classdict, vecsize=300):
+        self.wvmodel = wvmodel
+        self.classdict = classdict
+        self.vecsize = vecsize
+        self.trained = False
+
+    def train(self):
+        self.addvec = defaultdict(lambda: np.zeros(self.vecsize))
+        for classtype in self.classdict:
+            for shorttext in self.classdict[classtype]:
+                self.addvec[classtype] += self.shorttext_to_embedvec(shorttext)
+            self.addvec[classtype] /= np.linalg.norm(self.addvec[classtype])
+        self.addvec = dict(self.addvec)
+        self.trained = True
+
+    def shorttext_to_embedvec(self, shorttext):
+        vec = np.zeros(self.vecsize)
+        tokens = word_tokenize(shorttext)
+        for token in tokens:
+            if token in self.wvmodel:
+                vec += self.wvmodel[token]
+        norm = np.linalg.norm(vec)
+        if norm != 0:
+            vec /= np.linalg.norm(vec)
+        return vec
+
+    def score(self, shorttext):
+
+        vec = self.shorttext_to_embedvec(shorttext)
+        scoredict = {}
+        for classtype in self.addvec:
+            try:
+                scoredict[classtype] = 1 - cosine(vec, self.addvec[classtype])
+            except ValueError:
+                scoredict[classtype] = np.nan
+        return scoredict
+
+
 
 
 class CNNEmbeddedVecClassifier:
@@ -40,8 +79,8 @@ class CNNEmbeddedVecClassifier:
                  classdict,
                  n_gram,
                  vecsize=300,
-                 nb_filters=1,
-                 maxlen=1):
+                 nb_filters=1200,
+                 maxlen=200):
         self.wvmodel = wvmodel
         self.classdict = classdict
         self.n_gram = n_gram
@@ -60,14 +99,12 @@ class CNNEmbeddedVecClassifier:
         for label in classlabels:
             for shorttext in self.classdict[label]:
                 category_bucket = [0] * len(classlabels)
-                # generating the one hot vector
-                category_bucket[lblidx_dict[label]] = 1
+                category_bucket[lblidx_dict[label]] = 1#generating the one hot vector
                 indices.append(category_bucket)
                 phrases.append(word_tokenize(shorttext))
 
         # store embedded vectors
-        train_embedvec = np.zeros(
-            shape=(len(phrases), self.maxlen, self.vecsize))
+        train_embedvec = np.zeros(shape=(len(phrases), self.maxlen, self.vecsize))
         for i in range(len(phrases)):
             for j in range(min(self.maxlen, len(phrases[i]))):
                 train_embedvec[i, j] = self.word_to_embedvec(phrases[i][j])
@@ -76,9 +113,6 @@ class CNNEmbeddedVecClassifier:
         return classlabels, train_embedvec, indices
 
     def train(self):
-        tb = keras.callbacks.TensorBoard(log_dir='/tmp/', histogram_freq=0,
-                                         write_graph=True, write_images=True)
-
         # convert classdict to training input vectors
         self.classlabels, train_embedvec, indices = self.convert_trainingdata_matrix()
 
@@ -95,13 +129,11 @@ class CNNEmbeddedVecClassifier:
         model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
         # train the model
-        model.fit(train_embedvec, indices, callbacks=[tb])
+        model.fit(train_embedvec, indices)
 
         # flag switch
         self.model = model
         self.trained = True
-
-        print(model.summary())
 
     def word_to_embedvec(self, word):
         return self.wvmodel[word] if word in self.wvmodel else np.zeros(self.vecsize)
@@ -121,6 +153,7 @@ class CNNEmbeddedVecClassifier:
 
     def score(self, shorttext):
 
+
         # retrieve vector
         matrix = np.array([self.shorttext_to_matrix(shorttext)])
 
@@ -131,29 +164,34 @@ class CNNEmbeddedVecClassifier:
         scoredict = {}
         for idx, classlabel in zip(range(len(self.classlabels)), self.classlabels):
             scoredict[classlabel] = predictions[0][idx]
-
         return scoredict
 
     def compute_accuracy(self):
-        classlabels, test_embedvec, indices = CNNEmbeddedVecClassifier(
-            wvmodel, classdict_test, n_gram=2, nb_filters=3000, maxlen=75).convert_trainingdata_matrix()
+        classlabels, test_embedvec, indices = CNNEmbeddedVecClassifier(wvmodel,classdict_test,n_gram=5).convert_trainingdata_matrix()
         predictions = self.model.predict(test_embedvec)
-        correct_prediction = tf.equal(
-            tf.argmax(predictions, 1), tf.argmax(indices, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        correct_prediction = tf.equal(tf.argmax(predictions,1),tf.argmax(indices,1))
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction,tf.float32))
         with tf.Session() as sess:
             accuracy = sess.run(accuracy)
         return accuracy
+
+    def printing_results(self):
+        classlabels, test_embedvec, indices = CNNEmbeddedVecClassifier(wvmodel, classdict_test,
+                                                                       n_gram=5).convert_trainingdata_matrix()
+        predictions = self.model.predict(test_embedvec)
+        list = []
+        for i in predictions:
+            index, value = max(enumerate(i), key=operator.itemgetter(1))
+            list.append(index)
+
+        return list, indices
+
+
         # loss, accuracy = self.model.evaluate(test_embedvec,indices)
         # return loss, accuracy
 
-# average = SumEmbeddedVecClassifier(wvmodel, classdict_train, vecsize=300)
-# average.train()
-# print(average.addvec)
-
-
-CNN = CNNEmbeddedVecClassifier(
-    wvmodel=wvmodel, classdict=classdict_train, vecsize=300, n_gram=2, nb_filters=3000, maxlen=75)
+CNN = CNNEmbeddedVecClassifier(wvmodel=wvmodel,classdict=classdict_train,vecsize=300,n_gram=5,nb_filters=2000,maxlen=500)
 CNN.train()
+# CNN.save_model()
 print(CNN.compute_accuracy())
-print(CNN.score("We aim to be the best company in the world"))
+print(CNN.printing_results())
