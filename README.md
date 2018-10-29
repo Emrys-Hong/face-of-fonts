@@ -24,12 +24,15 @@ You will need  'GoogleNews-vectors-negative300.bin.gz' or [GloVe](https://nlp.st
 1. install packages using requirements.
 1. run ```python model/classify.py``` to test the accuracy
 
+result: It trains about 4 mins on a normal PC with only CPU. you should get an accuracy of around 46%
+
 ## To make things even cooler
-We can turn each font to its corresponding vector, ["font2vec"](https://github.com/Jack000/fontjoy) for thousands for google fonts. and then after getting your predicted result in each portion of the font, you can see what is the composed font by adding all of your font vector vectors together. This enable you to get predictions not limited to 9 fonts but to all 900 google fonts.
+We can turn each font to its corresponding vector, using a completely new idea -- Font2vec from ["fontjoy"](https://github.com/Jack000/fontjoy) for thousands for google fonts. and then after getting your predicted result in each portion of the font, you can see what is the composed font by adding all of your font vector vectors together. This enable you to get predictions not limited to 9 fonts but to all 900 google fonts. Check here for a quick idea of [font2vec](https://fontjoy.com/projector/)
+![fontjoy](https://github.com/Emrys-Hong/face-of-fonts/blob/master/fontjoy.png)
 
 To do this run ```python inference/GUI.py```
 the final prediction looks something like this:
-[demo](https://github.com/Emrys-Hong/face-of-fonts/blob/master/demo.png)
+![demo](https://github.com/Emrys-Hong/face-of-fonts/blob/master/demo.png)
 
 credits to [Tensorflow implmentation of Text Classifier](https://github.com/cahya-wirawan/cnn-text-classification-tf)
 
